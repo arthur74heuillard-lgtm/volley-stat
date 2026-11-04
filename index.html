@@ -81,7 +81,6 @@ ol,ul{list-style:none}
 .sync[data-k="error"]::before{background:#ff8e72}
 
 /* onglets */
-.tabbar{display:none}
 .tabbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--bg);border-bottom:1px solid var(--line)}
 .tabs{display:flex;gap:2px;overflow-x:auto}
 .tab{appearance:none;background:none;border:0;border-bottom:3px solid transparent;padding:13px 14px 11px;min-height:48px;cursor:pointer;font:600 18px/1 var(--display);letter-spacing:.07em;text-transform:uppercase;color:var(--ink-2)}
@@ -251,6 +250,15 @@ details.data summary{cursor:pointer;font-weight:600;font-size:14px;color:var(--i
 table.t{border-collapse:collapse;width:100%;min-width:480px;font-size:14px}
 table.t th,table.t td{padding:6px 10px;text-align:right;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
 table.t th:first-child,table.t td:first-child{text-align:left}
+table.help-t th,table.help-t td{text-align:left;vertical-align:top;font-variant-numeric:normal}
+table.help-t td small{display:block;color:var(--ink-2);font-size:12px}
+.steps{counter-reset:s;display:flex;flex-direction:column;gap:10px;max-width:70ch}
+.steps li{counter-increment:s;display:grid;grid-template-columns:28px 1fr;gap:10px}
+.steps li::before{content:counter(s);display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--ink);color:var(--bg);font:700 14px/1 var(--display)}
+.prose{display:flex;flex-direction:column;gap:10px;max-width:70ch}
+.prose dt{font-weight:600}
+.prose dd{margin:0 0 8px;color:var(--ink-2)}
+.calc{background:var(--surface-2);border-radius:10px;padding:12px 14px;max-width:70ch}
 table.t th{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2)}
 
 /* tooltip, toast, fenêtre */
@@ -496,7 +504,7 @@ const pick=(o)=>allEvents().filter(e=>(!o.match||e.mid===o.match)&&(!o.set||e.s=
 const PM=()=>{const o={};S.players.forEach(p=>o[p.id]=p);return o};
 
 /* ---------- Vues ---------- */
-const TABS=[['analysis','Analyse']];
+const TABS=[['analysis','Analyse'],['help','Explications']];
 function renderTabs(){
   $('#tabs').innerHTML=TABS.map(t=>`<button class="tab" role="tab" aria-selected="${U.tab===t[0]}" data-act="tab:${t[0]}">${t[1]}</button>`).join('');
 }
@@ -509,7 +517,7 @@ function renderHead(){
 }
 function render(){
   fixSel();renderHead();renderTabs();
-  const v={team:viewTeam,log:viewLog,analysis:viewAnalysis}[U.tab];
+  const v={team:viewTeam,log:viewLog,analysis:viewAnalysis,help:viewHelp}[U.tab];
   $('#panel').innerHTML=v();
 }
 
@@ -622,6 +630,69 @@ function refreshRecent(flash){
     f.textContent=`${p?p.name:''} · ${a.n} · ${a.r[3-U.last.r].l} enregistré`;
     f.classList.remove('pulse');void f.offsetWidth;f.classList.add('pulse');
   }
+}
+
+function viewHelp(){
+  const tbl=ACTIONS.map(a=>`<tr><td><b>${a.n}</b></td>${a.r.map(x=>`<td>${x.l}<small>${x.d}</small></td>`).join('')}</tr>`).join('');
+  const defs=ACTIONS.map(a=>`<dt>${a.n}</dt><dd>Réussite : ${a.ok}. Point perdu : ${a.r.filter(x=>x.loss).map(x=>x.l.toLowerCase()).join(' ou ')}.</dd>`).join('');
+  return `
+  <section class="card">
+    <div class="sec-head"><h2>Comment les actions sont saisies</h2></div>
+    <ol class="steps">
+      <li><span>Le match est filmé, et les actions sont saisies après, en regardant la vidéo. On peut mettre en pause et revoir une action au ralenti, donc rien n'est noté de mémoire.</span></li>
+      <li><span>On crée le match avec sa date et son adversaire.</span></li>
+      <li><span>Pour chaque action, on indique le <b>set</b>, le <b>joueur</b>, le <b>geste</b> (réception, attaque, service, défense, bloc ou passe) et le <b>résultat</b> sur une échelle de 3 à 0.</span></li>
+      <li><span>En cas d'erreur, on supprime l'action ou on annule la dernière.</span></li>
+      <li><span>Les données sont ensuite mises en ligne sur cette page. Le « dernier match » affiché en haut indique où on en est.</span></li>
+    </ol>
+  </section>
+  <section class="card">
+    <div class="sec-head"><h2>L'échelle de 3 à 0</h2><p class="sub">Chaque geste a ses propres résultats, mais toujours quatre niveaux : 3 pour le meilleur, 0 pour le pire.</p></div>
+    <div class="tbl-scroll"><table class="t help-t"><thead><tr><th>Geste</th><th>3 points</th><th>2 points</th><th>1 point</th><th>0 point</th></tr></thead><tbody>${tbl}</tbody></table></div>
+  </section>
+  <section class="card">
+    <div class="sec-head"><h2>Comment c'est calculé</h2></div>
+    <dl class="prose">
+      <dt>La note sur 100</dt>
+      <dd>C'est la moyenne des points obtenus, ramenée sur 100. On additionne les points de toutes les actions du joueur sur un geste, on divise par le maximum possible (3 points par action) et on multiplie par 100.</dd>
+    </dl>
+    <p class="calc" style="margin-top:6px">Exemple : un joueur reçoit 4 balles, une parfaite (3), une parfaite (3), une bonne (2) et une ratée (0). Ça fait 8 points sur 12 possibles, donc une note de 67 sur 100.</p>
+    <dl class="prose" style="margin-top:14px">
+      <dt>La réussite</dt>
+      <dd>La part des actions qui comptent comme réussies, selon le geste :</dd>
+      <dd><dl style="display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:4px 16px;margin:0">${defs.replace(/<dt>/g,'<dt style="font-weight:600;color:var(--ink)">').replace(/<dd>/g,'<dd style="margin:0">')}</dl></dd>
+      <dt>Les points perdus</dt>
+      <dd>La part des actions qui donnent directement le point à l'adversaire. Les résultats concernés sont listés ci-dessus à côté de chaque geste.</dd>
+      <dt>L'écart avec l'équipe</dt>
+      <dd>Pour un geste donné, on compare la note du joueur à la note de toute l'équipe sur ce même geste. Un écart de −10 veut dire dix points de moins que la moyenne de l'équipe.</dd>
+    </dl>
+  </section>
+  <section class="card">
+    <div class="sec-head"><h2>Comment lire les graphiques</h2></div>
+    <dl class="prose">
+      <dt>À travailler et Points forts</dt>
+      <dd>Ce sont les écarts les plus nets avec l'équipe. Un joueur n'y apparaît que s'il a au moins ${MIN} actions sur le geste et que l'écart est d'au moins 6 points. Les écarts reposant sur peu d'actions comptent un peu moins dans le classement. La liste montre les 5 plus gros écarts négatifs et les 3 plus gros écarts positifs.</dd>
+      <dt>Qui est faible où</dt>
+      <dd>Chaque case montre la note du joueur, avec le nombre d'actions en petit dessous. Plus la couleur est foncée, plus l'écart avec l'équipe est grand : rouge en dessous de la moyenne, bleu au dessus, gris proche de la moyenne. La couleur est à son maximum à partir de 25 points d'écart. Avec moins de ${MINC} actions, la case reste grise et affiche un tiret.</dd>
+      <dt>Fiche joueur</dt>
+      <dd>La barre bleue est la note du joueur et le trait noir la moyenne de l'équipe. À droite, la répartition montre combien d'actions ont eu chaque résultat. Les petits graphiques en dessous donnent une note par match, uniquement quand le joueur a au moins ${MINC} actions sur le geste. Ils suivent le filtre de set, mais pas celui de match.</dd>
+      <dt>Où l'équipe perd ses points</dt>
+      <dd>Le nombre d'actions qui donnent le point à l'adversaire, par geste puis par joueur, avec leur part dans toutes les actions.</dd>
+      <dt>L'équipe set après set</dt>
+      <dd>Chaque set est comparé à la moyenne du geste sur l'ensemble des sets. Ça sert à voir si le niveau baisse en fin de match. Il faut avoir saisi au moins deux sets.</dd>
+      <dt>Les filtres</dt>
+      <dd>Ils changent tout ce qui est affiché : on peut regarder un match ou un set en particulier.</dd>
+    </dl>
+  </section>
+  <section class="card">
+    <div class="sec-head"><h2>À prendre avec du recul</h2></div>
+    <ul class="prose" style="list-style:disc;padding-left:20px">
+      <li>Sur peu d'actions, un seul ballon change beaucoup la note. Un écart ne devient vraiment parlant qu'au bout de plusieurs matchs.</li>
+      <li>L'échelle est notée à l'œil par la personne qui saisit. Un résultat « bon » ou « moyen » reste une appréciation.</li>
+      <li>Les stats ne tiennent pas compte de la difficulté de la balle. Un joueur qui reçoit les services les plus durs aura une note plus basse sans être moins bon.</li>
+      <li>La moyenne de l'équipe inclut le joueur qu'on compare, et seules les actions saisies comptent.</li>
+    </ul>
+  </section>`;
 }
 
 /* ----- analyse ----- */
